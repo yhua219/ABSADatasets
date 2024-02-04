@@ -21,7 +21,7 @@ select the output file `*.seg` to annotate.
 
 ## <font color='yellowgreen'>How to use:</font>
 
- You can download the [<b>2_ASTE_DPT.html</b>](https://github.com/yhua219/ABSADatasets/tree/v2.0/DPT) file and open it in a browswer to use locally.
+ You can download the [<b>2_ASTE_DPT.html</b>](https://github.com/yhua219/ABSADatasets/blob/v2.0/DPT/2_ASTE_DPT.html) file and open it in a browswer to use locally.
  
  You can also use this [<b>ASTE_DPT online version</b>](https://yhua219.github.io/ASTE_DPT/). 
 
