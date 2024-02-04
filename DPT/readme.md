@@ -8,20 +8,59 @@
 
 You can find the tool scripts at https://github.com/yangheng95/ABSADatasets/tree/v2.0/DPT
 
-## Pre-word segmentation
+## 1. Pre-word segmentation
 Before annotating non-blank segmented text (e.g., English), you need to segment the data. Run `pre_word_segment_for_non_english_data.py` and
 select the output file `*.seg` to annotate.
 
-## A Stand-alone browser based tool to help process data for the training set
 
-![image1](https://user-images.githubusercontent.com/4684417/139701633-d77a009b-1a12-4ef2-9663-37d2d36e1af1.JPG)
+## 2. ASTE_DPT:  A Stand-alone browser based multi-purpose manual data annotation tool for ABSA
 
-Once data saved, 3 files will be created:
+ This repository contains [<b>ASTE_DPT</b>](https://github.com/yhua219/ABSADatasets/blob/v2.0/DPT/2_ASTE_DPT.html), an extended version of the ABSA Dataset Prepare Tool (DPT) [(source)](https://github.com/yangheng95/ABSADatasets/tree/v2.0/DPT) for Aspect-based Sentiment Analysis (ABSA) training dataset annotation. 
+ 
+ ASTE_DPT is a no-code, no-installation small HTML file that can be used locally without a server to protect data security/privacy. 
 
-1. a CSV file training set for classic sentiment analysis
-2. a TXT file training set for PyABSA
-3. a JSON file for saving unfinished work
+## <font color='yellowgreen'>How to use:</font>
 
-#### The txt file generated for PyABSA will be structured as below:
+ You can download the [<b>2_ASTE_DPT.html</b>](https://github.com/yhua219/ABSADatasets/tree/v2.0/DPT) file and open it in a browswer to use locally.
+ 
+ You can also use this [<b>ASTE_DPT online version</b>](https://yhua219.github.io/ASTE_DPT/). 
 
-![image](https://user-images.githubusercontent.com/4684417/139286711-152ea26e-5dbe-462a-bd73-287faf746572.png)
+The main features and steps are illustrated in the [Usage Instructions](https://github.com/yhua219/ABSADatasets?tab=readme-ov-file#usage-instructions) below.
+
+ For sample input data files, please try any of the files in [DPT/sample_data](https://github.com/yhua219/ABSADatasets/tree/v2.0/DPT/sample_data) subdirectory:
+
+ * The .seg and .csv files are raw text files for annotation
+
+ * The "ABSADataWorkFile.json" is an example export file containing saved annotation progress to be restored. 
+
+ --------------------
+
+## <font color='yellowgreen'>Input and output files:</font>
+ 
+ ASTE_DPT input: &emsp; &ensp; A CSV file with text entries.
+
+ ASTE_DPT outputs: &ensp; A zip file containing 4 dataset files: 
+  1) Training data files for Aspect-Sentiment-Triplet Extraction (ASTE) (new feature).
+
+  2) Training data files for Aspect-sentiment Classification (ASC), Aspect-term Extraction (AE) (from the original DPT), and Opinion-term extraction (OE) (new feature).
+
+  3) Training data files for sentence-level Sentiment-analysis (from the original DPT).  
+
+  4) Underlying data file that preserves progress and can be uploaded to restore previous progress and continue the annotation. 
+ 
+
+ All the output files follow the same format as in the [Datasets](https://github.com/yangheng95/ABSADatasets/tree/v2.0/datasets) subdirectory. These dataset files can be used by models in [PyABSA](https://github.com/yangheng95/PyABSA).
+
+<br>
+
+<i>Please visit [ABSA Dataset](https://github.com/yangheng95/ABSADatasets) for more information about the datasets and the original files (files other than 2_ASTE_DPT) in this repository.</i>
+
+<br>
+
+---------------------------------------------
+## <font color='yellowgreen'>Usage Instructions</font>
+
+![ASTE_DPT instructions](https://github.com/yhua219/ABSADatasets/blob/v2.0/ASTE_DPT%20instructions.png?raw=true)
+
+
+

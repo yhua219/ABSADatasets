@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASTE_DPT v1.0:  Extended PyABSA Dataset Preparation Tool</title>
+<head>
+    <script src="https://unpkg.com/vue@3.2.31/dist/vue.global.js"></script>
+    <!-- script for file parsing & saving  -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver"></script>
+    <!-- script for creating zip file --> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- script for logging message to html and dev console -->
+    <script src="https://cdn.jsdelivr.net/gh/Alorel/console-log-html@master/console-log-html.min.js"></script>
+    <!-- lodash is needed for processData functions e.g. _.flatternDeep --> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <!-- script for stylesheets, button-groups, popover -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+    crossorigin="anonymous"></script>
+
+    <!--  custom CSS styles -->
+    <style>
+        .popover {
+            max-width: 300px !important;
+        }
+        .popClose {
+            cursor: pointer;
+        }
+        .table-responsive {
+            max-width: 95%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .wtoken span:not(.skip):hover {
+            background-color: #f4fb61;  
+            opacity: 0.8;
+            font: bold 1.05rem "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            cursor: pointer;
+            transition: 0.2s;
+            padding: 2px 6px;
+            border-radius: 10px; /* for round corner */
+            /* border-color: transparent !important;  */
+        }
+        .wtoken span.active {
+            background-color: #f4fb61; 
+            opacity: 0.8;
+            font: bold 1.05rem "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            cursor: pointer;
+            transition: 0.2s;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        select.OverallMarked {
+            font: bold 0.95rem "Segoe UI", Roboto, "Helvetica Neue", Arial !important;
+        }
+        .fixed-width-select {
+            width: 80px; /* Adjust width as needed */
+            /*padding: 0.375rem 1.5rem;  Adjust padding to match pagination height */
+            line-height: 1; /* Adjust line-height for proper alignment */
+        }
+        /* The following annotation classes are automatically updated. The values 'Pos/Neg' etc. came from this.item.class,
+           The corresponding classes are automatically updated via 
+                            <span
+                                :id="item.tkid"
+                                :class="'a-' + item.class" ...> 
+        */
+    
+        .a-Pos, .a-Pos-Overall {
+            background-color: #198754 !important;
+            color: white !important;  
+            padding: 2px 2px 1px 2px; 
+            display: inline-block;
+        }
+        .a-Neu, .a-Neu-Overall {
+            background-color: #6c757d !important;
+            color: white !important;  
+            padding: 2px 2px 1px 2px; 
+            display: inline-block;
+        }
+        .a-Neg, .a-Neg-Overall {
+            background-color: #dc3545 !important;
+            color: white !important;  
+            padding: 2px 2px 1px 2px; 
+            display: inline-block;
+        }
+        .a-Asp { 
+            font: bold 1.05rem "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            color: black !important;
+            border: 1px solid black; 
+            padding: 1px 1px 2px 1px; 
+            display: inline-block; /* Makes the span a block-level element to apply the border */
+        }
+        .a-Pos:not(.linked), .a-Neu:not(.linked), .a-Neg:not(.linked) {
+            border: 6px solid yellow !important; 
+        }
+        .a-Asp:not(.linked) {
+            background-color: #f4fb61 !important;
+        }
+
+    </style>
+
+</head>
+<body>
+<div id='ABSADPT'>
+    <div class="container table-responsive">
+        <br>
+        <h4>ASTE_DPT: A multi-purpose manual data annotation tool for ABSA <a href="https://github.com/yhua219/ABSADatasets" target="_blank">(info)</a></h4>
+        <br>
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <h5 class="card-header">
+                        <span v-show="!dataReady">Load Raw Data</span>
+                        <span v-show="dataReady && !tableReady">Please click Start to extract aspect</span>
+                        <span v-show="tableReady">Save your work</span>
+                    </h5>
+                    <div class="card-body" v-if="!dataReady">
+                        <h5 class="card-title">Please choose CSV file from your local drive</h5>
+                        <p class="card-text">CSV Data should be single column without header</p>
+                        <input type="file" ref="fileInput" style="display:none" @change="handleFileChange">
+                        <button class="btn btn-primary" @click="loadFile" >Load</button>
+                    </div>
+
+                    <!-- Second card-body section -->
+                    <div class="card-body" v-else-if="dataReady && !tableReady">
+                        <button class="btn btn-success" @click="displayTable">Start</button>
+                    </div>
+
+                    <!-- Third card-body section -->
+                    <div class="card-body" v-else style="display: flex; justify-content: space-between;">
+                        <button v-if="tableReady" id="reloadButton" class="btn btn-dark" @click="reloadPage" >Restart App</button>
+                        <button id="saveButton" class="btn btn-success" @click="saveResult">Export Result</button>
+                    </div>
+         
+                    <div class="card-footer" v-if="vConFooter">
+                        <ul ref="vConsole"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+
+    <!-- Table & annotation page -->
+    <div class="table-responsive" v-show="tableReady">
+
+        <!-- Overall input statistics -->
+        <P>Total pages = {{totalPages}} &nbsp; &nbsp; Total rows = {{totalRows}}</P>
+
+        <!-- Top navigation bar -->
+        <div class="d-flex align-items-center" style="padding-bottom: 0rem;">
+
+            <p class="me-2">Rows per page:</p>
+
+            <select v-model="rowsPerPage" id="rowsPerPage" @change="handleRowsPerPageChange" class="form-select mb-2 me-2 fixed-width-select">
+                <option v-for="option in [5, 10, 20, 50, 100]" :key="option" :value="option">{{ option }}</option>
+            </select>
+
+            <nav aria-label="Page navigation">
+                <ul class="pagination mb-0">
+
+                    <li class="page-item" :class="{disabled: currPage === 1}">
+                        <a class="page-link" aria-label="First" @click="currPage = 1"> 
+                        <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item" :class="{disabled: currPage === 1}">
+                        <a class="page-link" aria-label="Previous" @click="prevPage">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+
+                    <li class="page-item" v-for="pageNum in displayedPages" :class="{active: currPage === pageNum}" :key="pageNum">
+                        <a class="page-link" @click="currPage=pageNum">
+                            {{pageNum}}
+                        </a>
+                    </li>
+
+                    <li class="page-item" :class="{disabled: currPage === totalPages}">
+                        <a class="page-link" aria-label="Next" @click="nextPage">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item" :class="{disabled: currPage === totalPages}">
+                        <a class="page-link" aria-label="Last" @click="currPage = totalPages">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+            </nav>
+        </div>
+        
+
+        <!-- Data Table -->
+        <table class="table table-striped table-bordered border-primary">
+            <thead>
+                <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Text</th>
+                    <th scope="col">Overall</th>
+                </tr>
+            </thead>
+
+            <tbody> 
+                <tr v-for="(rowArrays, rowIndices) in displayedRows" :key="currPage+'-'+rowIndices">
+                    <!-- column 1: index of each row/entry -->
+                    <th scope="row" style="width:80px;">{{ rowArrays.rvid }}</th>
+
+                    <!-- column 2: the text of each row/entry, parsed into tokens -->
+                    <td>
+                        <span class="wtoken">
+                            <template v-for="(item, index) in rowArrays.rvarr">
+                                <!-- ====== This block displays each token <span> in each row of table 'Text' column ======
+                                            Need to v-if filter blank token that are resulted from token merge          -->
+                                <span
+                                v-if="item.tk.trim() !== ''"
+                                :id="item.tkid"
+                                :class="['a-' + item.class, { 'linking': item.linking }, { 'linked': item.linked }]"
+                                @click="item.tk.trim().length === 0 ? void(0) : tokenHighlight(rowArrays.rvid, rowArrays.rvarr, item, index)"
+                            >
+                                    <!-- Add a space before non-sentence-starting or punctuation-mark tokens for display -->
+                                    {{ index === 0 || item.tk.match(/\p{P}/gu)? item.tk : ` ${item.tk}` }}
+                                </span>
+                                <!-- ====================== End of 'Text' column token span ============================== -->
+                            </template>
+                        </span>
+                    </td>
+
+                    <!-- column 3: dropdown list to choose the sentiment category of the row -->
+                    <td style="width:130px;">
+                        <select aria-label=".form-select-sm" v-model="rowArrays['Overall']"
+                                :class="overallClass(rowArrays['Overall'])">
+                            <option value="">Select...</option>
+                            <option class="a-Pos-Overall" value="Pos">Positive</option>
+                            <option class="a-Neu-Overall" value="Neu">Neutral</option>
+                            <option class="a-Neg-Overall" value="Neg">Negative</option>
+                        </select>
+                    </td>
+                </tr>
+            </tbody>
+        </table> 
+
+        <!-- Bottom navigation bar --> 
+        <div class="d-flex align-items-center" style="padding-bottom: 0rem;">
+
+            <p class="me-2">Rows per page:</p>
+
+            <select v-model="rowsPerPage" id="rowsPerPage" @change="handleRowsPerPageChange"
+                class="form-select mb-2 me-2 fixed-width-select">
+                <option v-for="option in [5, 10, 20, 50, 100]" :key="option" :value="option">{{ option }}</option>
+            </select>
+
+            <nav aria-label="Page navigation">
+                <ul class="pagination mb-0">
+
+                    <li class="page-item" :class="{disabled: currPage === 1}">
+                        <a class="page-link" aria-label="First" @click="currPage = 1">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item" :class="{disabled: currPage === 1}">
+                        <a class="page-link" aria-label="Previous" @click="prevPage">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+
+                    <li class="page-item" v-for="pageNum in displayedPages" :class="{active: currPage === pageNum}" :key="pageNum">
+                        <a class="page-link" @click="currPage=pageNum">
+                            {{pageNum}}
+                        </a>
+                    </li>
+
+                    <li class="page-item" :class="{disabled: currPage === totalPages}">
+                        <a class="page-link" aria-label="Next" @click="nextPage">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item" :class="{disabled: currPage === totalPages}">
+                        <a class="page-link" aria-label="Last" @click="currPage = totalPages">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Example data structure: ----------------------------------
+
+        ===================================================
+        1) One array from processData(row) ->  rows.data):
+        ---------------------------------------------------
+        0: ['hello  word !']
+
+        ===================================================
+        2) In HTML <tr v-for="(rowArrays, rowIndices) in displayedRows"..>:
+        ---------------------------------------------------
+        rowIndices: 1   (rowIndices = rvid)
+
+        rowArrays: {
+            "rvid": 1,
+            "rvarr": {
+                "0": { "tkid": "R1_0", "tk": "hello" }, 
+                "1": { "tkid": "R1_1", "tk": "" },
+                "2": { "tkid": "R1_2", "tk": "word" },
+                "3": { "tkid": "R1_3", "tk": "!" }
+            },
+            "Overall": "" 
+        }
+
+        ===================================================
+        3) in HTML <template v-for="(item, index) in rowArrays.rvarr" ...>
+        ---------------------------------------------------
+        index: 0
+        item: { "tkid": "R1_0", "tk": "hello", "label": "Asp", "annotated": true}
+        item.tk: 'hello'
+
+        index: 1
+        item: { "tkid": "R1_1", "tk": "" }
+        item.tk: ''
+
+        index: 2
+        item: { "tkid": "R1_2", "tk": "word", "label": "Pos", "annotated": true}
+        item.tk: 'world'
+
+        index: 3
+        item: { "tkid": "R1_3", "tk": "!" }
+        item.tk: '!' 
+
+        ===================================================
+        4) in tokenHighlight(): (when clicking on "hello")
+        ---------------------------------------------------
+        this.targetSpan = event.target = 
+        <span id="R1_0" class="a-Asp active" data-bs-original-title="" title="" aria-describedby="popover676471">
+            hello
+        </span>
+-------------------------------------------------------------- -->
+
+<script>
+    //======================================================================================
+    // Vue 3 script for rendering text data in a table and annotate via Boostrap popover
+    //======================================================================================
+
+    const ABSADPT = Vue.createApp({
+        data() {
+            return {
+                dataReady: false,
+                tableReady: false,
+                vConFooter: true,
+
+                currPage: 1, 
+                rowsPerPage: 10,
+                totalRows: 0,  
+
+                rowIndex: null,
+                rowArray: null,
+                targetSpan: null,
+                item: null,
+                index: null,
+                popover: null,
+                popoverType: null,
+                popoverInUse: false,
+                isDownloading: false, 
+                itemToLink: null,
+                linkingClicked: false,
+
+                sentimentClass: ['Pos', 'Neu', 'Neg'],
+                labelClass: ['Asp', 'Pos', 'Neu', 'Neg'],
+                attributeList: ['annotated', 'separate', 'itemType', 'linked', 'sentiment', 'class', 'pairID', 'pairIDStr'],
+
+                rawABSAData: [],
+                preABSAData: [],
+                processedABSAData: [],
+            };
+        },
+        //======================================================================================
+        mounted() {
+            // Accessing the vConsole using this.$refs
+            ConsoleLogHTML.connect(
+                this.$refs.vConsole, // Pass the ul element reference
+                true // Append at the bottom
+            );
+            // Add global event listener for clicks outside token/popover
+            document.addEventListener("click", this.onClickOutside);
+        },
+
+        beforeUnmount() { // Remove global event listener
+            document.removeEventListener("click", this.onClickOutside);
+        },
+
+        //======================================================================================
+        // computed variables automatically gets updated when the depended variables change
+        computed: {
+            totalPages() {
+                return Math.ceil(this.totalRows / this.rowsPerPage);
+            },
+            displayedRows() {
+                const start = ((this.currPage - 1) * this.rowsPerPage) + 1; // Displayed pageNum and indices both start from 1 
+                const end = (start + parseInt(this.rowsPerPage)) -1; // Parse to integer to ensure correct calculation; should be last row of the page
+        
+                const selected = {};
+                for (let i = start; i <= end; i++) {  // use <= so the actual last row num is included in iteration, just for logical clarity
+                    if (this.preABSAData[i]) {
+                        selected[i] = this.preABSAData[i];
+                    }
+                }
+                return selected; 
+            },
+            displayedPages() {
+                const maxPagesToShow = 10;
+                const startPage = Math.max(1, this.currPage - Math.floor(maxPagesToShow / 2));
+                const endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+                const pageNumbers = [];
+                for (let i = startPage; i <= endPage; i++) {
+                    pageNumbers.push(i);
+                }
+                return pageNumbers;
+            },
+            // Only track neighbours here. Change within targetSpan won't be updated in time here so use methods instead. 
+            prevItem(){
+                return this.targetSpan.previousElementSibling? this.rowArray[parseInt(this.targetSpan.previousElementSibling.id.split('_')[1])] : null;
+            },
+            nextItem(){
+                return this.targetSpan.nextElementSibling? this.rowArray[parseInt(this.targetSpan.nextElementSibling.id.split('_')[1])] : null;
+            },
+            prevItemAnnotated(){
+                return this.prevItem && this.prevItem.hasOwnProperty('annotated');
+            },
+            nextItemAnnotated(){
+                return this.nextItem && this.nextItem.hasOwnProperty('annotated');
+            },
+        },
+
+        //======================================================================================
+        // watch gets automatically called the function-name variables change
+        watch: {
+            popover() {
+                //------- register EventListeners to pickup popover button clicks --------
+                this.targetSpan.addEventListener('shown.bs.popover', () => {   // only do the popClose thing after popover shows
+
+                    // popClose trigger is separate from the popover body
+                    const popCloseTrigger = document.getElementById('popClose');
+                    if (popCloseTrigger) {
+                        popCloseTrigger.addEventListener('click', this.closePopover, { once: true });
+                    };
+                    // handle button click within the popover body: vanila aspect vs. opinion
+                    const annotationPanel = document.getElementById(`pop_${this.targetSpan.id}`);
+                    if (annotationPanel) {
+                        annotationPanel.addEventListener('click', this.clickHandler, { once: true });
+                    };
+                    // handle the initial-click phase2 "choosing associated aspect/opinion" panel button click
+                    const linkPanel = document.getElementById('linkPanel');
+                    if (linkPanel) {
+                        linkPanel.addEventListener('click', this.linkHandler, { once: true });
+                    };
+                    // handle button click within the popover body: clear or link pair
+                    const postHocPanel = document.getElementById(`pop_${this.targetSpan.id}_annotated`);
+                    if (postHocPanel) {
+                        postHocPanel.addEventListener('click', this.clickHandler, { once: true });
+                    };
+                },
+                // only create one event-listener per each targetSpan across its popovers  
+                { once: true });
+            },
+
+            itemToLink(){
+                if (this.itemToLink && this.itemToLink.hasOwnProperty('linked')){
+                    delete this.itemToLink['linking'];
+                }
+            },
+        },
+
+        methods: {
+            //----------- navigator helper functions ------------------
+            setCurrentPage(pageNumber) {
+                this.currPage = pageNumber;
+            },
+
+            prevPage() {
+                if (this.currPage > 1) {
+                    this.currPage -= 1;
+                }
+            },
+
+            nextPage() {
+                if (this.currPage < this.totalPages) {
+                    this.currPage += 1;
+                }
+            },
+
+            handleRowsPerPageChange() {
+                const newTotalPages = this.totalPages;
+                if (this.currPage > newTotalPages) {
+                    this.currPage = newTotalPages;
+                }
+            },
+            //----------- data table & data processing functions ------------------
+            displayTable() {
+                this.vConFooter = false;
+                this.tableReady = true;
+            },
+
+            overallClass(v) {
+                return `form-select form-select-sm ${!v ? '' : `OverallMarked a-${v}-Overall`}`;
+            },
+
+            //==============================================================================
+            // calls a Boostrap popover when a token is clicked. Triggered by the html @click
+
+            tokenHighlight(rowIndex, rowArray, item, index) {  // event is passed via @click implicitly
+
+                if (this.popover) {
+                    this.closePopover();
+                };
+                this.rowIndex = rowIndex;
+                this.targetSpan = event.target;
+                this.rowArray = rowArray;
+                this.index = index;
+                this.item = rowArray[index];
+
+                // if does not already have sentiment class, toggle element class to "active"
+                if (!this.labelClass.some(cls => this.targetSpan.classList.contains(cls))) {
+                    this.targetSpan.classList.toggle('active');  //targetClassList accesses the dom element's list of all class values
+                };
+
+                // if this click is to find a pair for an annotated token:
+                //    case 1: if itemToLink is Aspect and the current token hasn't been annotated, show sentiment popover, 
+                //    case 2: if itemToLink is Aspect and the current token has sentiment marked, directly process linking result via submitItemLink(),  
+                //    case 3: if itemToLink is Opinion, directly process linking result via submitItemLink().  
+                if (this.itemToLink && this.itemToLink.hasOwnProperty('linking') && this.itemToLink !== item) {
+                    
+                    if (this.itemToLink.itemType === 'Asp') { 
+                        this.item['itemType'] = 'Opn';
+                        this.item['linking'] = true;
+                        if (!this.item.annotated) { // case 1
+                            this.popover = this.createPopover(this.targetSpan, 'highlight');
+                            this.popover.show();
+                        } else { // case 2 
+                            this.submitItemLink(this.item.sentiment);
+                        }
+                    } else { // case 3 
+                        this.submitItemLink(this.item.itemType);
+                    }
+
+                } else {
+                    this.itemToLink = null;
+                    this.popoverType = (!this.item.hasOwnProperty('annotated') && (this.prevItemAnnotated || this.nextItemAnnotated)) ? 'action' : 'highlight';
+
+                    this.popover = this.createPopover(this.targetSpan, this.popoverType);
+                    this.popover.show();
+                };
+
+            },
+            //===================================================================================
+            // Returns a Boostrap popover object, assign to this.popover.
+            // Popover button-clicking management is under 'watch' based on this.popover change
+
+            createPopover(targetSpan, popoverType) {
+
+                if (this.item.hasOwnProperty('separate')) {
+                    delete this.item['separate'];
+                };
+                const isAnnotated = this.item.hasOwnProperty('annotated');
+                const isAsp = this.item.hasOwnProperty('annotated') && this.item.itemType === 'Asp';
+                const isOpn = this.item.hasOwnProperty('annotated') && this.item.itemType === 'Opn';
+                const linkingOpn = this.itemToLink && this.itemToLink.itemType === 'Asp' && this.itemToLink.hasOwnProperty('linking');
+                const linked = this.item.hasOwnProperty('linked') && this.item.linked;  
+
+                // Popover content 'container' to be rendered properly via popoverTemplateCompiler
+                const popoverContent = document.createElement('div');
+
+                // Popover content HTML string for when the prev or next token has been annotated
+                const actionTemplate =
+                    `
+                    <div id="pop_${targetSpan.id}" class="btn-group" role="group">
+                        <button v-if="${this.prevItemAnnotated}" id="JoinLeft" type="button" class="btn btn-outline-dark btn-sm">Join left</button>
+                        <button v-if="${this.nextItemAnnotated}" id="JoinRight" type="button" class="btn btn-outline-dark btn-sm">Join right</button>
+                        <button id="Separate" type="button" class="btn btn-info btn-sm">Separate</button>
+                    </div>
+                    `;
+
+                // Popover content HTML string for when the prev or next token has NOT been annotated, or "Separate" was selected from actionTemplate-popover
+                // id='Asp' v-if "!aspectClicked", id='Opn' v-if "!aspectClicked && !sentimentClicked", id="Sen" v=if "!sentimentClicked": to hide the button in "linking" panel.
+                // NOTE:  The <label> and 'linkPanel' <div> must use v-show if the elements are to be identified by getElementById at document level (can't be null).  
+                //        If using v-if, the getElementById needs to be called inside clickHandler(event) after "id==='Asp" and inside document.getElementById('Sen')'s (e)=>{...}, i.e. after the <div> is instantiated.  
+
+                const highlightTemplate =
+                    `
+                    <div id="pop_${targetSpan.id}" class="btn-group d-flex justify-content-center" role="group">
+                        <button id="Asp" v-if="!${isAnnotated} && !${linkingOpn} && !opinionClicked && !aspectClicked" class="btn btn-warning btn-sm" @click="aspectClicked=true">Aspect</button>
+                        <button id="Opn" v-if="!${isAnnotated} && !${linkingOpn} && !opinionClicked && !aspectClicked" class="btn btn-secondary btn-sm" @click="opinionClicked=true">Opinion</button>
+
+                        <label v-if="!${isAnnotated} && ((opinionClicked && !sentimentClicked) || ${linkingOpn})">
+                            <div id="Sen" class="btn-group d-flex justify-content-center" role="group">  
+                                <button id="Pos" class="btn btn-success btn-sm" @click="sentimentClicked=true">Positive</button>
+                                <button id="Neu" class="btn btn-secondary btn-sm" @click="sentimentClicked=true">Neutral</button>
+                                <button id="Neg" class="btn btn-danger btn-sm" @click="sentimentClicked=true">Negative</button>
+                            </div>
+                        </label>
+                       
+                        <div  v-show="(sentimentClicked || aspectClicked)" id="linkPanel" class="btn-group d-flex justify-content-center" role="group"> 
+                            <button v-if="sentimentClicked && !${linkingOpn}" id="linkAsp" class="btn btn-primary btn-sm">Choose Aspect</button>
+                            <button v-if="aspectClicked && !${linkingOpn}" id="linkOpn" class="btn btn-info btn-sm">Choose Opinion</button> 
+                        </div>
+                    </div>
+                    `;
+
+                    const clearOrLinkTemplate = 
+                    `
+                    <div  id="pop_${targetSpan.id}_annotated" class="btn-group d-flex justify-content-center" role="group"> 
+                        <button id="Clr" class="btn btn-dark btn-sm">CLEAR</button>
+                        <button v-if="${isOpn} && !${linked}" id="linkAsp" class="btn btn-primary btn-sm">Choose Aspect</button>
+                        <button v-if="${isAsp} && !${linked}" id="linkOpn" class="btn btn-info btn-sm">Choose Opinion</button> 
+                    </div>   
+                    `;
+
+                // Decide which template to use for popover body content   
+                const popoverContentHTML = popoverType === 'action'? actionTemplate : isAnnotated? clearOrLinkTemplate : highlightTemplate;
+
+                // popover Title HTML does not get compiled via the nested Vue app, so cannot use Vue directives e.g. v-if
+                let titletext = popoverType === 'highlight' ? 'Annotate token' : 'Join neighbour?';
+                const titleHTML =
+                    `<div class="float-right" style="display: flex; justify-content: space-between;">
+                    <span class="btn-sm">${titletext}</span>
+                    <i id="popClose" class="bi bi-x-square"></i>
+                    </div>`
+
+                //------------------------------------------------------------------------------
+                // Use a nested Vue instance to compile HTML string to get Vue directives work.
+                // However this instance is insulated from the main app, so no variable passing.    
+
+                const popoverTemplateCompiler = Vue.createApp({
+                    data() {
+                        return {
+                            opinionClicked: false,
+                            aspectClicked: false,
+                            sentimentClicked: false, 
+                        };
+                    },
+                    computed: {
+                        linkButtonText() {
+                            return this.opinionClicked ? 'aspect' : 'opinion';
+                        }
+                    },
+                    methods: {},
+                    template: popoverContentHTML,
+                }).mount(popoverContent);  // the 'mount' part compiles popover HTML properly
+
+                // ------------- Back to main app ------------------------------
+
+                // Generate a new Boostrap popover instance for this.targetSpan   
+                let popoverObj = new bootstrap.Popover(targetSpan, {
+                    container: 'body',
+                    placement: 'top',
+                    trigger: 'manual',
+                    html: true,
+                    sanitize: false,
+                    title: titleHTML,
+                    content: popoverContent,
+                });
+
+                return popoverObj;
+            },
+
+            //==============================================================================
+            //======== Popover Actions : ===========
+
+            closePopover() { 
+                this.targetSpan.classList.remove('active');
+                if (this.popover) {
+                    this.popover.dispose();
+                    this.popover = null;
+                };
+                this.popoverInUse = false;
+
+                if (!this.itemToLink){
+                    this.linkingClicked = false;
+                }
+            },
+
+            onClickOutside(event) {            
+                if (
+                    (this.popover && !this.popoverInUse && 
+                        (this.targetSpan !== event.target || (this.targetSpan === event.target && this.item.hasOwnProperty('separate')))
+                    ) 
+                    ||
+                    (this.popover && this.targetSpan !== event.target && event.target.classList.length == 0 && !(this.item.hasOwnProperty('linking')))
+                ) {
+                    this.closePopover();
+                }
+            },
+
+
+
+            clearAttributes(item) {
+                this.attributeList.forEach(attributeName => {
+                    delete item[attributeName];
+                });
+            },
+
+            unmerge() {
+                // just a precaution to check if unmerge is necessary
+                if (this.item.hasOwnProperty('data-id-merged')) {
+                    var merged_ids = this.item['data-id-merged'].split('|');
+                    var merged_tks = merged_ids ? this.item.tk.split(/\s*\b\s*/) : null;
+
+                    for (let i = 0; i < merged_ids.length; i++) {
+                        let idx = parseInt(merged_ids[i].split('_')[1]);
+                        let newtk = merged_tks[i].trim();
+                        this.rowArray[idx].tk = newtk;
+                        this.clearAttributes(this.rowArray[idx]);                         
+                    };
+                    delete this.item['data-id-merged'];
+                    this.item['tkidStr'] = this.item.tkid.split('_')[1];
+
+                    if (this.item.linked) {
+                        const linkedPair = _.find(this.rowArray, { tkid: this.item.pairID });
+                        linkedPair['pairIDStr'] = this.item.tkidStr;
+                    };
+                };
+            },
+
+            clear() {
+                if (this.item.hasOwnProperty('pairID')) {
+                    const itemToLink = _.find(this.rowArray, { tkid: this.item.pairID }); 
+                    delete itemToLink['pairID'];
+                    delete itemToLink['linked'];
+                    delete itemToLink['pairIDStr'];
+                    if (this.item.itemType === 'Opn') {
+                        delete itemToLink['sentiment'];
+                    };
+                };
+                // If this.targetSpan is part of a merged token, undo the merge: 
+                if (this.item.hasOwnProperty('data-id-merged')){
+                    this.unmerge();
+                };
+                // Generate clearing of annotations in all cases:
+                this.popoverInUse = false;
+                this.linkingClicked = false; 
+                this.clearAttributes(this.item);
+            },
+
+            submitted() {
+                if (this.item.hasOwnProperty('itemType')){
+                    this.item['annotated'] = true;
+                };
+                if (this.item.hasOwnProperty('separate')) {
+                    delete this.item['separate'];
+                };
+                if (this.item.itemType==='Asp' || (this.item.sentiment && this.linkingClicked) || this.item.linked){
+                    this.closePopover();   
+                };
+            },
+
+            showAgain() { 
+                this.popover.dispose();
+                this.popover = this.createPopover(this.targetSpan, 'highlight');
+                this.popover.show();
+            },
+
+            mergeToken(choice) {
+                var currToken = this.item.tk.trim();
+                var neighbourItem = choice === "JoinLeft" ? this.prevItem : this.nextItem;
+                var neighbourToken = neighbourItem.tk.trim();
+
+                // construct merged new token and assign to neighbour index, clear old this.item token
+                var newStr = choice === "JoinLeft" ? `${neighbourToken} ${currToken}` : `${currToken} ${neighbourToken}`;
+                neighbourItem.tk = newStr;
+                this.item.tk = '';
+                // delete this.item['annotated'];
+                this.clearAttributes(this.item);
+                this.closePopover();
+
+                // update the 'data-id-merged' attribute of this.item and neighbour spans
+                if (neighbourItem.hasOwnProperty('data-id-merged')) {
+                    const aleadyMergedID = neighbourItem['data-id-merged'];
+                    if (choice === "JoinLeft") {
+                        neighbourItem['data-id-merged'] = `${aleadyMergedID}|${this.item.tkid}`;
+                    } else {
+                        neighbourItem['data-id-merged'] = `${this.item.tkid}|${aleadyMergedID}`;
+                    };
+                } else {
+                    if (choice === "JoinLeft") {
+                        neighbourItem['data-id-merged'] = `${neighbourItem.tkid}|${this.item.tkid}`;
+                    } else {
+                        neighbourItem['data-id-merged'] = `${this.item.tkid}|${neighbourItem.tkid}`;
+                    };
+                };
+                neighbourItem['tkidStr'] = neighbourItem['data-id-merged'].split('|').map(tkid => tkid.split('_')[1]).join(', ');
+                
+                if (neighbourItem.linked) {
+                    const neighbourLinkedPair = _.find(this.rowArray, { tkid: neighbourItem.pairID });
+                    neighbourLinkedPair['pairIDStr'] = neighbourItem.tkidStr;
+                };
+
+                // update merged annotation
+                this.submitted();
+            },
+            
+            //-----------------------------------------------------------
+            //======== functions called from watch > popover(): =========
+
+            // Handle main popover buttons
+            clickHandler(event) {
+                const id = event.target.id;
+                if (id != this.targetSpan.id && !this.item.hasOwnProperty('separate')) { 
+                    this.popoverInUse = true;
+                };
+                // Perform actions based on the clicked button ID               
+                if (id === 'Separate') {
+                    this.item['separate'] = true;
+                    this.showAgain(); 
+                } else if (id === 'JoinLeft' || id === 'JoinRight') {
+                    this.mergeToken(id); 
+                } else if (id === 'Clr') { 
+                    this.clear();
+                } else if (id === 'Asp') { 
+                        this.item['itemType'] = id;
+                        this.item['class'] = id;
+                        this.item['annotated'] = true;  
+                } else if (id === 'Opn') { 
+                    this.item['itemType'] = id;
+                    // handle sentiment popover right after 'Opinion' was clicked
+                    const sentimentPanel = document.getElementById('Sen');
+                    if (sentimentPanel) {
+                        sentimentPanel.addEventListener('click', (e) => {
+                            const SentId = e.target.id;
+                            this.item['class'] = SentId;
+                            this.item['sentiment'] = SentId;
+                            if (this.item.linking && this.itemToLink.hasOwnProperty('itemType') && this.itemToLink.itemType === 'Asp') {  
+                                this.submitItemLink(SentId);
+                            } else {
+                                this.submitted();
+                            }; 
+                        });
+                    };
+                // handle linking sentiment from annotated aspect
+                } else if (this.sentimentClass.includes(id)) { 
+                    this.item['sentiment'] = id;
+                    this.item['class'] = id;
+                    if (this.item.linking && this.itemToLink.itemType === 'Asp') {  
+                        this.submitItemLink(id);
+                    } else {
+                        this.submitted();
+                    };
+                // handle post-annotation linking panel
+                } else if (['later', 'linkAsp', 'linkOpn'].includes(id)) {
+                    this.linkHandler(event);
+                };
+            },
+
+            // after clicked either 'Aspect' or 'Opinion >> sentiment', handle pair linking
+            linkHandler(event) {
+                const id = event.target.id;
+                if (id === 'later') { 
+                    this.closePopover();
+                } else if (id === 'linkAsp' || id === 'linkOpn') {
+                    this.itemToLink = this.item;
+                    this.linkingClicked = true;
+                    this.itemToLink['linking'] = true;
+                    this.item['linking'] = true;
+                    this.submitted();
+                };
+            },
+
+            submitItemLink(id){
+                this.item['annotated'] = true;
+                this.item['itemType'] = this.item.hasOwnProperty('itemType')? this.item.itemType : this.itemToLink.itemType === 'Asp' ? 'Opn' : 'Asp';
+                this.item['class'] = this.item.hasOwnProperty('class')? this.item.class: this.sentimentClass.includes(id) ? id : 'Asp';
+
+                if (this.itemToLink.itemType === 'Asp') {
+                    this.itemToLink['sentiment'] = this.item.sentiment;
+                } else if (this.itemToLink.itemType === 'Opn') {
+                    this.item['sentiment'] = this.itemToLink.sentiment;
+                };
+
+                this.item['linked'] = true;
+                this.itemToLink['linked'] = true;
+
+                this.item['pairID'] = this.itemToLink.tkid;
+                this.item['pairIDStr'] = this.itemToLink.tkidStr? this.itemToLink.tkidStr : this.itemToLink.tkid.split('_')[1];
+
+                this.itemToLink['pairID'] = this.item.tkid;
+                this.itemToLink['pairIDStr'] = this.item.tkidStr? this.item.tkidStr : this.item.tkid.split('_')[1];
+
+                delete this.itemToLink['linking'];
+                delete this.item['linking'];
+                this.linkingClicked = false;
+                this.submitted();
+            },
+
+            //==============================================================================
+
+            reloadPage() {
+                window.location.reload();
+            },
+
+            loadFile() {
+                this.$refs.fileInput.click();
+            },
+
+            handleFileChange(event) {
+                let fileList = event.target.files || event.dataTransfer.files;
+                if (!fileList || !fileList.length) {
+                    console.error('File is empty, please upload a Json or CSV file');
+                    return;
+                } else {  
+                    const inputfile = fileList[0];
+                    console.log(`Using file "${inputfile.name}"`);
+
+                    if (inputfile.name.split('.')[1]==='json') { 
+                        this.readJsonFile(inputfile);
+                    } else {  
+                        this.readCSVFile(inputfile);
+                    } 
+                }
+            },
+
+            readJsonFile(file) {
+                //------------------------------------------
+                // read a json file exported from this app, 
+                // directly updates this.preABSAData & renders previous annotation
+                //-------------------------------------------
+                let reader = new FileReader();
+                reader.onload = event => {
+                    // event.target.result object becomes valid after reader.readAsText(file) is completed 
+                    const jsonData = JSON.parse(event.target.result);
+
+                    this.totalRows = _.keys(jsonData).length; 
+                    this.preABSAData = jsonData;
+                    this.dataReady = true;
+                    
+                    console.info("Row count:", this.totalRows);
+                    console.debug('Data Loaded Successfully!');
+                    console.info("Parse complete");
+                };
+                reader.onerror = (event) => {
+                    console.error("     Number of errors in processing file:", event.target.error);
+                };
+                // Read the file to instantiate 'event.target.result'
+                reader.readAsText(file); 
+            },
+
+            readCSVFile(file) {
+                //------------------------------------------
+                // read a CSV file, calls 'processCSV' to assign data to this.preABSAData 
+                //-------------------------------------------
+                const configOptions = {
+                    delimiter: ',',
+                    skipEmptyLines: true,
+                    worker: true,
+                    complete: (results) => {
+                        this.processCSV(results);
+                    },
+                    error: (err, file, inputElem, reason) => {
+                        console.error(err, reason);
+                    }
+                };
+                Papa.parse(file, configOptions);
+            },      
+
+            processCSV(rows) {
+                //------------------------------------------
+                // Pre-process CSV data, including data structure formation
+                //-------------------------------------------
+                if (rows.errors.length > 0) {
+                    console.error("     Number of errors in processing file:", rows.errors.length);
+                } else {
+                    console.info("     Errors:", rows.errors.length);
+                    console.debug('Data Loaded Successfully!');
+                    console.info("Parse complete");
+                    console.info("  Row count:", rows.data.length);
+
+                    this.dataReady = true;
+                    this.rawABSAData = _.flattenDeep(rows.data);
+
+                    let wtoken = this.rawABSAData
+                        .filter(v => v !== null && v.trim().length > 0) // Sentences: Filter out sentences that are null or whitespace-only
+                        .map(v => v.split(' ')                          // Split the sentence by space into an array of tokens. 
+                                   .filter(v => v.trim().length > 0)    // Exclude white-spaces-only tokens
+                        );
+
+                    this.totalRows = wtoken.length;
+
+                    this.preABSAData = _.keys(wtoken).reduce((result, key) => {
+                        const words = wtoken[key];
+                        const rvarr = {};
+                        // constructing each token's attributes. Index starts from 0 for each rvarr (i.e. row)
+                        // (E.g. for rvarr index 4, outputs `4: {tkid: 'R2_4', tk: 'animals'}`) 
+                        words.forEach((word, index) => {
+                            rvarr[index] = {
+                                tkid: `R${parseInt(key) + 1}_${index}`,
+                                tk: word,
+                                // label: null,   (example of adding more pre-defined attributes)
+                                // annotated: null,
+                            };
+                        });
+                        result[parseInt(key) + 1] = {
+                            rvid: parseInt(key) + 1,
+                            rvarr: rvarr,
+                            Overall: "",
+                        };
+                        return result;
+                    }, {});
+                }
+            },
+        
+    //==============================================================================              
+            saveResult(event) {
+                //============================================================================
+                // iterate through all row arrays, prepare ASC and ASTE source data in one go
+                //============================================================================
+                let resultData = _.chain(_.values(this.preABSAData))  // get the values of the nested objects
+                    .map((row) => _.map(_.values((row.rvarr))))  // get the 'rvarr' row arrays
+                    .map((item) => {  // for each token array 'item' inside all the row arrays
+
+                        // construct the original sentence.  Replace aspect-token with $T$ and opinion token with $O$
+                        let annotatedIndices = _.keys(_.pickBy(item, { annotated: true }));
+                        let ASTETempOutput = [];
+                        let ASCTempOutput = [];
+
+                        const rawSentence = item.map((v, i) => (v.tk.trim().length === 0 ? '' : i === 0 || v.tk.match(/\p{P}/gu) ? v.tk : ` ${v.tk}`)).join('').trim();  // add a space in front of token if not the first token or punctuation
+
+                        // if no annotation on text, return original sentence
+                        if (_.size(annotatedIndices) == 0) {
+                            ASCTempOutput.push({ sentence: rawSentence, sentiment: [] });
+                            ASTETempOutput.push({ sentence: rawSentence, triplets: [] });
+
+                        } else { // else, for each annotated token, return masked sentence with the token masked, and the token itself
+                            let vCopy = _.cloneDeep(item);  // make a copy of each token array, as we are tweaking tokens for masking
+                            let triplets = [];
+
+                            //iterating through each item (i.e. sentence or row), update annotated tokens with the mask string
+                            _.each(annotatedIndices, (tkIdx) => {
+                                let temp = _.chain(vCopy)
+                                    .map((wtk, i) => {
+
+                                        // tkidStr = wtk.tkidStr? wtk.tkidStr : wtk['data-id-merged'] ? wtk['data-id-merged'].split('|').map(tkid => tkid.split('_')[1]).join(', '): wtk.tkid.split('_')[1];
+                                        // // pairIDStr = !wtk.linked ? null : wtk.pairIDStr? wtk.pairIDStr : wtk.pairID.split('_')[1]; 
+                                        tkidStr = wtk.tkidStr? wtk.tkidStr : wtk.tkid.split('_')[1];
+                                        pairIDStr = !wtk.linked ? null : wtk.pairIDStr; 
+
+                                        if (wtk.itemType === 'Asp' && i == +tkIdx) {
+                                            wtk.tkFinal = '$T$'; // mask aspect token with $T$
+                                            // create triplet entry for this aspect token and its linked opinion 
+                                            triplets.push(`([${tkidStr}], [${pairIDStr}], '${_.toUpper(wtk.sentiment)}')`); 
+                                        } else if (wtk.itemType === 'Opn' && i == +tkIdx) {
+                                            wtk.tkFinal = '$O$'; // mask opinion token with $O$ 
+                                            // create triplet entry for this Opinion token and its linked Aspect 
+                                            triplets.push(`([${pairIDStr}], [${tkidStr}], '${_.toUpper(wtk.sentiment)}')`);  
+                                        } else {
+                                            wtk.tkFinal = wtk.tk.trim(); //otherwise use original token
+                                        };
+                                        return wtk;
+                                    })
+                                    .value();
+
+                                // construct the masked-version sentence
+                                const maskedSentence = temp.map((v, i) => (v.tkFinal.trim().length === 0 ? '' : i === 0 || v.tkFinal.match(/\p{P}/gu) ? v.tkFinal : ` ${v.tkFinal}`)).join('').trim();
+
+                                // extract sentiment for annotated tokens
+                                const ASCpairs = _.chain(temp)
+                                    .pickBy({ annotated: true })
+                                    .result(tkIdx)
+                                    .pick(["tk", "sentiment"])
+                                    .value();
+
+                                ASCTempOutput.push({ sentence: maskedSentence, ASCpairs: [ASCpairs] });
+                                ASTETempOutput.push({ sentence: rawSentence, triplets: triplets })
+                            });
+                        };
+                        let tempResult = { ASCTempOutput, ASTETempOutput };
+                        return tempResult;
+                    })
+                    .flatten().value();
+
+                // //============================================
+                // // output ASC (ASC & OSC) training data
+                // //============================================
+                let ABSATrainingSet = _.chain(resultData)
+                    .map((data) => {
+                        let tempOutput = [];
+                        _.map(data.ASCTempOutput, v => {
+                            if (_.size(v.ASCpairs) == 0) {
+                                tempOutput.push(v.sentence)
+                            } else {
+                                _.each(v.ASCpairs, (tk_senti_pair) => {
+                                    tempOutput.push(v.sentence);
+                                    tempOutput.push(tk_senti_pair.tk);
+                                    sentimentStr = tk_senti_pair.sentiment === 'Pos' ? 'Positive' : tk_senti_pair.sentiment === 'Neu' ? 'Neutral' : tk_senti_pair.sentiment === 'Neg' ? 'Negative' : 'null';
+                                    tempOutput.push(sentimentStr);
+                                });
+                            };
+                        }); 
+                        return tempOutput;
+                    })
+                    .flattenDeep()
+                    .value();
+
+                // // ============================================
+                // //  output ASTE training data
+                // // ============================================
+                let ASTETrainingSet = _.chain(resultData)
+                    .flattenDeep()
+                    .map((data) => {
+                        let tempOutput = [];
+                        _.map(data.ASTETempOutput, v => { 
+                            if (_.size(v.triplets) == 0) {
+                                tempOutput.push(v.sentence)
+                            } else {
+                                const entry = `${v.sentence}####[${_.uniq(v.triplets)}]`;
+                                tempOutput.push(entry)
+                            };  
+                        });
+                        return tempOutput;
+                    })
+                    .flattenDeep()
+                    .uniq()
+                    .value();
+
+                // // ============================================
+                // //  output sentence-level SA training data
+                // // ============================================
+                let SATrainingSet = Papa.unparse(
+                    JSON.stringify(_.chain(_.values(this.preABSAData))  // get the values of the nested objects
+                        .map((row) => _.map(_.values(_.pick(row, ["rvarr", "Overall"])))) // get the 'rvarr' row arrays
+                        .map((item) => {  // for each token array 'item' inside all the row arrays
+
+                        // item is an array of two elements:
+                        // [{"0": {"tkid": "R1_0","tk": ""}, "1": {"tkid": "R1_1","tk": "iPhone13"}, ..},  "Pos"]
+                            let sentence = _.values(item[0]) 
+                                .map((v, i) => (_.size(v.tk.trim())===0? '' : i === 0 || v.tk.match(/\p{P}/gu)? v.tk : ` ${v.tk}`))
+                                .join('').trim(); 
+
+                            let sentiment = _.values(item[1]).join('');
+                            if (sentiment == "Pos")
+                                sentiment = "Positive";
+                            else if (sentiment == "Neu")
+                                sentiment = "Neutral";
+                            else if (sentiment == "Neg")
+                                sentiment = "Negative";
+
+                            return { sentence: sentence, overall: sentiment };
+                        })
+                        .value()
+                    ),
+                    {
+                        delimiter: ",",
+                        header: true,
+                        worker: true
+                    }
+                );
+
+                //===========================
+                // Export progress file to continue after upload
+
+                let JSONworkingFile = JSON.stringify(this.preABSAData);              
+
+                // ======= export a 3-in-1 zip file =============== 
+                const files = [
+                    { file: ASTETrainingSet.join("\r\n"), filename: "ASTETrainingSet.txt" },
+                    { file: ABSATrainingSet.join("\r\n"), filename: "custom.apc.train.txt" },
+                    { file: SATrainingSet, filename: "SATrainingSet.csv" },
+                    { file: JSONworkingFile, filename: "ABSADataWorkFile.json" }
+                ];  
+                
+                const zip = new JSZip();
+                const saveAs = window.saveAs;
+
+                // Add each file to the zip
+                files.forEach(({ file, filename }) => {
+                    zip.file(filename, file);
+                });
+
+                // Generate the zip file asynchronously
+                zip.generateAsync({ type: 'blob' })
+                    .then((blob) => {
+                        // Save or download the generated zip file
+                        saveAs(blob, 'output.zip'); 
+                    })
+                    .catch((error) => {
+                        console.error('Error creating zip file:', error);
+                    });
+
+                //// =============================================================
+                //// ======= export 3 individual files, but will likely reload the page before finishing so the 3rd file can't be downloaded ===============
+                // let saveAs = window.saveAs;
+                // let blob0 = new Blob([ASTETrainingSet.join("\r\n")], { type: "text/plain" });
+                // let blob1 = new Blob([ABSATrainingSet.join("\r\n")], { type: "text/plain" });
+                // let blob2 = new Blob([SATrainingSet], { type: "text/csv" });
+                // let blob3 = new Blob([JSONworkingFile], { type: "application/json" }); 
+                
+                // saveAs(blob0, "ASTETrainingSet.txt"); 
+                // saveAs(blob1, "custom.apc.train.txt"); 
+                // saveAs(blob2, "SATrainingSet.csv"); 
+                // saveAs(blob3, "ABSADataWorkFile.json");  
+                //// =============================================================
+            },
+
+        },
+
+    });
+
+    ABSADPT.mount('#ABSADPT');
+
+</script>
+</body>
+</html>
