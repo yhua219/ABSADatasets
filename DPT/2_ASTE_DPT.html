@@ -224,7 +224,7 @@
                                 @click="item.tk.trim().length === 0 ? void(0) : tokenHighlight(rowArrays.rvid, rowArrays.rvarr, item, index)"
                             >
                                     <!-- Add a space before non-sentence-starting or punctuation-mark tokens for display -->
-                                    {{ index === 0 || item.tk.match(/\p{P}/gu)? item.tk : ` ${item.tk}` }}
+                                    {{ index === 0 || item.tk.match(/^[\p{P}\p{S}]+$/gu)? item.tk : ` ${item.tk}` }}
                                 </span>
                                 <!-- ====================== End of 'Text' column token span ============================== -->
                             </template>
@@ -672,6 +672,15 @@
             //==============================================================================
             //======== Popover Actions : ===========
 
+            updateDisplayedTKSpace(){
+                // if current item is annotated, pad the prev or next span textContent with a space to separate the hilight box. Does not alter tk text. 
+                if (this.item.annotated && this.targetSpan.previousElementSibling){ 
+                    this.targetSpan.previousElementSibling.textContent += ' '; 
+                } else if (this.item.annotated && this.targetSpan.nextElementSibling){ 
+                    this.targetSpan.nextElementSibling.textContent = ' ' + this.targetSpan.nextElementSibling.textContent; 
+                };
+            },
+
             closePopover() { 
                 this.targetSpan.classList.remove('active');
                 if (this.popover) {
@@ -682,7 +691,11 @@
 
                 if (!this.itemToLink){
                     this.linkingClicked = false;
-                }
+                };
+                // if annotated, pad the prev or next span textContent with one more space to look "normal". Does not alter tk text. 
+                if (this.item.annotated){
+                    this.updateDisplayedTKSpace();
+                };
             },
 
             onClickOutside(event) {            
@@ -1026,7 +1039,7 @@
                         let ASTETempOutput = [];
                         let ASCTempOutput = [];
 
-                        const rawSentence = item.map((v, i) => (v.tk.trim().length === 0 ? '' : i === 0 || v.tk.match(/\p{P}/gu) ? v.tk : ` ${v.tk}`)).join('').trim();  // add a space in front of token if not the first token or punctuation
+                        const rawSentence = item.map((v, i) => (v.tk.trim().length === 0 ? '' : i === 0 || v.tk.match(/^[\p{P}\p{S}]+$/gu) ? v.tk : ` ${v.tk}`)).join('').trim();  // add a space in front of token if not the first token or punctuation
 
                         // if no annotation on text, return original sentence
                         if (_.size(annotatedIndices) == 0) {
@@ -1063,7 +1076,7 @@
                                     .value();
 
                                 // construct the masked-version sentence
-                                const maskedSentence = temp.map((v, i) => (v.tkFinal.trim().length === 0 ? '' : i === 0 || v.tkFinal.match(/\p{P}/gu) ? v.tkFinal : ` ${v.tkFinal}`)).join('').trim();
+                                const maskedSentence = temp.map((v, i) => (v.tkFinal.trim().length === 0 ? '' : i === 0 || v.tkFinal.match(/^[\p{P}\p{S}]+$/gu) ? v.tkFinal : ` ${v.tkFinal}`)).join('').trim();
 
                                 // extract sentiment for annotated tokens
                                 const ASCpairs = _.chain(temp)
@@ -1136,7 +1149,7 @@
                         // item is an array of two elements:
                         // [{"0": {"tkid": "R1_0","tk": ""}, "1": {"tkid": "R1_1","tk": "iPhone13"}, ..},  "Pos"]
                             let sentence = _.values(item[0]) 
-                                .map((v, i) => (_.size(v.tk.trim())===0? '' : i === 0 || v.tk.match(/\p{P}/gu)? v.tk : ` ${v.tk}`))
+                                .map((v, i) => (_.size(v.tk.trim())===0? '' : i === 0 || v.tk.match(/^[\p{P}\p{S}]+$/gu)? v.tk : ` ${v.tk}`))
                                 .join('').trim(); 
 
                             let sentiment = _.values(item[1]).join('');
