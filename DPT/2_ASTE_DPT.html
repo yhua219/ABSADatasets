@@ -224,7 +224,7 @@
                                 @click="item.tk.trim().length === 0 ? void(0) : tokenHighlight(rowArrays.rvid, rowArrays.rvarr, item, index)"
                             >
                                     <!-- Add a space before non-sentence-starting or punctuation-mark tokens for display -->
-                                    {{ index === 0 || item.tk.match(/^[\p{P}\p{S}]+$/gu)? item.tk : ` ${item.tk}` }}
+                                    {{ index === 0 || item.tk.match(/^[\p{P}\p{S}]+$/gu) || item.annotated? `${item.tk.trim()}` : ` ${item.tk}` }}
                                 </span>
                                 <!-- ====================== End of 'Text' column token span ============================== -->
                             </template>
@@ -410,7 +410,7 @@
                     if (this.preABSAData[i]) {
                         selected[i] = this.preABSAData[i];
                     }
-                }
+                };
                 return selected; 
             },
             displayedPages() {
@@ -722,7 +722,7 @@
                 // just a precaution to check if unmerge is necessary
                 if (this.item.hasOwnProperty('data-id-merged')) {
                     var merged_ids = this.item['data-id-merged'].split('|');
-                    var merged_tks = merged_ids ? this.item.tk.split(/\s*\b\s*/) : null;
+                    var merged_tks = merged_ids ? this.item.tk.split(/\s+/) : null;
 
                     for (let i = 0; i < merged_ids.length; i++) {
                         let idx = parseInt(merged_ids[i].split('_')[1]);
@@ -944,12 +944,31 @@
                 let reader = new FileReader();
                 reader.onload = event => {
                     // event.target.result object becomes valid after reader.readAsText(file) is completed 
-                    const jsonData = JSON.parse(event.target.result);
+                    const rawJson = JSON.parse(event.target.result);
 
-                    this.totalRows = _.keys(jsonData).length; 
+                    // Add a trailing space to the token before an annotated token
+                    const jsonData = _.mapValues(rawJson, item => {
+                        let previousRvarrItem = null;
+                        return {
+                            ...item,
+                            rvarr: _.mapValues(item.rvarr, (rvarrItem, key) => {
+                                let updatedRvarrItem = {
+                                    ...rvarrItem,
+                                    tk: rvarrItem.tk.trim()
+                                };
+                                if (rvarrItem.annotated && previousRvarrItem) {
+                                    previousRvarrItem.tk += ' ';
+                                };
+                                previousRvarrItem = updatedRvarrItem;
+                                return updatedRvarrItem;
+                            })
+                        };
+                    });
+
+                    this.totalRows = _.keys(jsonData).length;
                     this.preABSAData = jsonData;
                     this.dataReady = true;
-                    
+
                     console.info("Row count:", this.totalRows);
                     console.debug('Data Loaded Successfully!');
                     console.info("Parse complete");
@@ -958,7 +977,7 @@
                     console.error("     Number of errors in processing file:", event.target.error);
                 };
                 // Read the file to instantiate 'event.target.result'
-                reader.readAsText(file); 
+                reader.readAsText(file);
             },
 
             readCSVFile(file) {
@@ -996,7 +1015,7 @@
 
                     let wtoken = this.rawABSAData
                         .filter(v => v !== null && v.trim().length > 0) // Sentences: Filter out sentences that are null or whitespace-only
-                        .map(v => v.split(' ')                          // Split the sentence by space into an array of tokens. 
+                        .map(v => v.split(/\s+/)                          // Split the sentence by space into an array of tokens. 
                                    .filter(v => v.trim().length > 0)    // Exclude white-spaces-only tokens
                         );
 
@@ -1039,8 +1058,7 @@
                         let ASTETempOutput = [];
                         let ASCTempOutput = [];
 
-                        const rawSentence = item.map((v, i) => (v.tk.trim().length === 0 ? '' : i === 0 || v.tk.match(/^[\p{P}\p{S}]+$/gu) ? v.tk : ` ${v.tk}`)).join('').trim();  // add a space in front of token if not the first token or punctuation
-
+                        const rawSentence = item.map((v, i) => (v.tk.trim().length === 0 ? '' : i === 0 || v.tk.match(/^[\p{P}\p{S}]+$/gu) ? v.tk.trim() : ` ${v.tk.trim()}`)).join('').trim();  // add a space in front of token if not the first token or punctuation
                         // if no annotation on text, return original sentence
                         if (_.size(annotatedIndices) == 0) {
                             ASCTempOutput.push({ sentence: rawSentence, sentiment: [] });
@@ -1054,9 +1072,6 @@
                             _.each(annotatedIndices, (tkIdx) => {
                                 let temp = _.chain(vCopy)
                                     .map((wtk, i) => {
-
-                                        // tkidStr = wtk.tkidStr? wtk.tkidStr : wtk['data-id-merged'] ? wtk['data-id-merged'].split('|').map(tkid => tkid.split('_')[1]).join(', '): wtk.tkid.split('_')[1];
-                                        // // pairIDStr = !wtk.linked ? null : wtk.pairIDStr? wtk.pairIDStr : wtk.pairID.split('_')[1]; 
                                         tkidStr = wtk.tkidStr? wtk.tkidStr : wtk.tkid.split('_')[1];
                                         pairIDStr = !wtk.linked ? null : wtk.pairIDStr; 
 
