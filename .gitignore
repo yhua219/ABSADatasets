@@ -154,3 +154,4 @@ dmypy.json
 .DS_Store
 .DS_Store
 examples/.DS_Store
+/version_backup/
